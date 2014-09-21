@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
-// Copyright (c) 2013-2014 Dogecoin Developers
+// Copyright (c) 2013-2014 Cccccoin Developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_MAIN_H
@@ -11,6 +11,7 @@
 #include "net.h"
 #include "script.h"
 #include "scrypt.h"
+#include "hashblock.h"
 
 #include <list>
 
@@ -55,7 +56,7 @@ static const int64 DUST_SOFT_LIMIT = 100000000;
 /** Dust Hard Limit, ignored as wallet inputs (mininput default) */
 static const int64 DUST_HARD_LIMIT = 1000000;
 /** No amount larger than this (in satoshi) is valid */
-static const int64 MAX_MONEY = 10000000000 * COIN; // DogeCoin: maximum of 100B coins (given some randomness), max transaction 10,000,000,000 for now
+static const int64 MAX_MONEY = 10000000000 * COIN; // CcccCoin: maximum of 100B coins (given some randomness), max transaction 10,000,000,000 for now
 inline bool MoneyRange(int64 nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 /** Coinbase transaction outputs can only be spent after this number of new blocks (network rule) */
 static const int COINBASE_MATURITY = 30;
@@ -72,6 +73,10 @@ static const int fHaveUPnP = true;
 #else
 static const int fHaveUPnP = false;
 #endif
+
+static const int SHA256_MINING_MODE = 0;
+static const int SCRYPT_MINING_MODE = 1;
+static const int X11_MINING_MODE = 2;
 
 
 extern CScript COINBASE_FLAGS;
@@ -199,6 +204,7 @@ bool AbortNode(const std::string &msg);
 
 
 
+unsigned char GetNfactor(int64 nTimestamp);
 
 
 
@@ -627,7 +633,7 @@ public:
     {
         // Large (in bytes) low-priority (new, small-coin) transactions
         // need a fee.
-        return dPriority > 100 * COIN * 1440 / 250; // DogeCoin: 1440 blocks found a day. Priority cutoff is 100 dogecoin day / 250 bytes.
+        return dPriority > 100 * COIN * 1440 / 250; // CcccCoin: 1440 blocks found a day. Priority cutoff is 100 cccccoin day / 250 bytes.
     }
 
 // Apply the effects of this transaction on the UTXO set represented by view
@@ -1371,8 +1377,69 @@ public:
 
     uint256 GetPoWHash() const
     {
-        uint256 thash;
-        scrypt_1024_1_1_256(BEGIN(nVersion), BEGIN(thash));
+        uint256 thash = GetHash();
+        uint256 thash2;
+        uint256 thash3;
+        //uint256 thash4;
+        unsigned int orig_nBits;
+
+        fprintf(stderr,"pow1: %s\n", thash.ToString().c_str());
+        CBlockHeader head = GetBlockHeader();
+        //unsigned int mult = (head.nbits & 0xff000000) >> (4*6);
+        //unsigned int base = head.nbits & 0x007fffff;
+        //unsigned int targ = (((mult+1) << (4*6))
+        //head.nBits <<= 6;
+        orig_nBits = head.nBits;
+        CBigNum hashTarget = CBigNum().SetCompact(head.nBits);
+        hashTarget <<= 8;
+        head.nBits = hashTarget.GetCompact();
+        scrypt_N_1_1_256(BEGIN(head.nVersion), BEGIN(thash2), 10);
+        thash2 >>= 8;
+        if ( thash2 < thash )
+            thash = thash2;
+
+        fprintf(stderr,"pow2: %s\n", thash2.ToString().c_str());
+
+
+
+        hashTarget = CBigNum().SetCompact(orig_nBits);
+        hashTarget <<= 7;
+        //hashTarget >>= 1;
+        head.nBits = hashTarget.GetCompact();
+        thash3 = Hash9(BEGIN(nVersion), END(nNonce));
+        thash3 >>= 7;
+        if ( thash3 < thash )
+            thash = thash3;
+        
+        fprintf(stderr,"pow3: %s\n", thash3.ToString().c_str());
+
+        //unsigned char nFact = GetNfactor(nTime);
+        //if (nFact > 10) {
+            ////head.nBits <<= (nFact - 10);
+            //hashTarget <<= (nFact - 10);
+            //head.nBits = hashTarget.GetCompact();
+            //scrypt_N_1_1_256(BEGIN(head.nVersion), BEGIN(thash3), nFact);
+            //thash3 >>= (8 + nFact - 10);
+            //if ( thash3 < thash )
+                //thash = thash3;
+
+            ////head.nBits = nBits;
+            ////head.nBits <<= (2 + nFact - 10 + 2);
+            //hashTarget <<= 2;
+        //} else {
+            ////head.nBits = nBits;
+            ////head.nBits <<= (2 + nFact - 10 + 2);
+            //hashTarget <<= (nFact - 10 + 2);
+        //}
+
+        //head.nBits = hashTarget.GetCompact();
+        //scrypt_N_1_1_256(BEGIN(head.nVersion), BEGIN(thash4), nFact+2);
+        //thash4 >>= (8 + nFact - 10 + 2);
+        //if ( thash4 < thash )
+            //thash = thash4;
+
+        head.nBits = orig_nBits;
+
         return thash;
     }
 
@@ -1476,20 +1543,25 @@ public:
 
         // Open history file to read
         CAutoFile filein = CAutoFile(OpenBlockFile(pos, true), SER_DISK, CLIENT_VERSION);
-        if (!filein)
+        if (!filein) {
+            fprintf(stderr,"CBlock::ReadFromDisk() : OpenBlockFile failed");
             return error("CBlock::ReadFromDisk() : OpenBlockFile failed");
+        }
 
         // Read block
         try {
             filein >> *this;
         }
         catch (std::exception &e) {
+            fprintf(stderr, "%s() : deserialize or I/O error", __PRETTY_FUNCTION__);
             return error("%s() : deserialize or I/O error", __PRETTY_FUNCTION__);
         }
 
         // Check the header
-        if (!CheckProofOfWork(GetPoWHash(), nBits))
+        if (!CheckProofOfWork(GetPoWHash(), nBits)) {
+            fprintf(stderr, "CBlock::ReadFromDisk() : errors in block header");
             return error("CBlock::ReadFromDisk() : errors in block header");
+        }
 
         return true;
     }

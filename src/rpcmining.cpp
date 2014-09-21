@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
-// Copyright (c) 2013-2014 Dogecoin Developers
+// Copyright (c) 2013-2014 Cccccoin Developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -128,6 +128,41 @@ Value setgenerate(const Array& params, bool fHelp)
     return Value::null;
 }
 
+Value getminingmode(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getminingmode\n"
+            "Returns sha256, scrypt or x11.");
+
+    int mode = GetArg("-miningmode", 0);
+    if ( mode == SCRYPT_MINING_MODE )
+        return "scrypt";
+    else if ( mode == X11_MINING_MODE ) 
+        return "x11";
+    return "sha256";
+}
+
+Value setminingmode(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1 )
+        throw runtime_error(
+            "setminingmode <miningmode>\n"
+            "<miningmode> is 'sha256', 'scrypt' or 'x11' to use those respective PoW hashes.");
+
+    int mode = -1;
+    if (params[0].get_str() == "sha256")
+        mode = SHA256_MINING_MODE;   
+    else if (params[0].get_str() == "scrypt")
+        mode = SCRYPT_MINING_MODE;   
+    else if (params[0].get_str() == "x11")
+        mode = X11_MINING_MODE;   
+    else 
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
+    mapArgs["-miningmode"] = itostr(mode);
+    return Value::null;
+}
+
 
 Value gethashespersec(const Array& params, bool fHelp)
 {
@@ -174,15 +209,17 @@ Value getworkex(const Array& params, bool fHelp)
         );
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Dogecoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Cccccoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Dogecoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cccccoin is downloading blocks...");
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
     static vector<CBlockTemplate*> vNewBlockTemplate;
     static CReserveKey reservekey(pwalletMain);
+
+    int miningmode = GetArg("-miningmode", 0);
 
     if (params.size() == 0)
     {
@@ -231,7 +268,19 @@ Value getworkex(const Array& params, bool fHelp)
         IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
 
         // Save
-        mapNewBlock[pblock->hashMerkleRoot] = make_pair(pblock, pblock->vtx[0].vin[0].scriptSig);
+        mapNewBlock[pblock->hashMerkleRoot] = make_pair(pblock, pblock->vtx[-1].vin[0].scriptSig);
+
+        // Adjust nBits based on PoW in use
+        unsigned int orig_nBits = pblock->nBits;
+        CBigNum htarg = CBigNum().SetCompact(pblock->nBits);
+        if ( miningmode != SHA256_MINING_MODE ) {
+            if ( miningmode == SCRYPT_MINING_MODE )
+	        htarg <<= 8;
+            else if ( miningmode == X11_MINING_MODE )
+	        htarg <<= 7;
+            pblock->nBits = htarg.GetCompact();
+        }
+        uint256 hashTarget = htarg.getuint256();
 
         // Pre-build hash buffers
         char pmidstate[32];
@@ -239,14 +288,14 @@ Value getworkex(const Array& params, bool fHelp)
         char phash1[64];
         FormatHashBuffers(pblock, pmidstate, pdata, phash1);
 
-        uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
-
         CTransaction coinbaseTx = pblock->vtx[0];
         std::vector<uint256> merkle = pblock->GetMerkleBranch(0);
 
         Object result;
         result.push_back(Pair("data",     HexStr(BEGIN(pdata), END(pdata))));
         result.push_back(Pair("target",   HexStr(BEGIN(hashTarget), END(hashTarget))));
+
+        pblock->nBits = orig_nBits;
 
         CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
         ssTx << coinbaseTx;
@@ -281,6 +330,15 @@ Value getworkex(const Array& params, bool fHelp)
         for (int i = 0; i < 128/4; i++)
             ((unsigned int*)pdata)[i] = ByteReverse(((unsigned int*)pdata)[i]);
 
+        //if ( miningmode != SHA256_MINING_MODE ) {
+        //    CBigNum htarg = CBigNum().SetCompact(pdata->nBits);
+        //    if ( miningmode == SCRYPT_MINING_MODE )
+	//        htarg >>= 8;
+        //    else if ( miningmode == X11_MINING_MODE )
+	//        htarg >>= 7;
+        //    pdata->nBits = htarg.GetCompact();
+        //}
+
         // Get saved block
         if (!mapNewBlock.count(pdata->hashMerkleRoot))
             return false;
@@ -314,14 +372,16 @@ Value getwork(const Array& params, bool fHelp)
             "If [data] is specified, tries to solve the block and returns true if it was successful.");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Dogecoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Cccccoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Dogecoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cccccoin is downloading blocks...");
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
     static vector<CBlockTemplate*> vNewBlockTemplate;
+
+    int miningmode = GetArg("-miningmode", 0);
 
     if (params.size() == 0)
     {
@@ -372,19 +432,32 @@ Value getwork(const Array& params, bool fHelp)
         // Save
         mapNewBlock[pblock->hashMerkleRoot] = make_pair(pblock, pblock->vtx[0].vin[0].scriptSig);
 
+        // Adjust nBits based on PoW in use
+        unsigned int orig_nBits = pblock->nBits;
+        CBigNum htarg = CBigNum().SetCompact(pblock->nBits);
+        if ( miningmode != SHA256_MINING_MODE ) {
+            if ( miningmode == SCRYPT_MINING_MODE )
+	        htarg <<= 8;
+            else if ( miningmode == X11_MINING_MODE )
+	        htarg <<= 7;
+            pblock->nBits = htarg.GetCompact();
+        }
+        uint256 hashTarget = htarg.getuint256();
+
         // Pre-build hash buffers
         char pmidstate[32];
         char pdata[128];
         char phash1[64];
         FormatHashBuffers(pblock, pmidstate, pdata, phash1);
 
-        uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
-
         Object result;
         result.push_back(Pair("midstate", HexStr(BEGIN(pmidstate), END(pmidstate)))); // deprecated
         result.push_back(Pair("data",     HexStr(BEGIN(pdata), END(pdata))));
         result.push_back(Pair("hash1",    HexStr(BEGIN(phash1), END(phash1)))); // deprecated
         result.push_back(Pair("target",   HexStr(BEGIN(hashTarget), END(hashTarget))));
+
+        pblock->nBits = orig_nBits;
+
         return result;
     }
     else
@@ -398,6 +471,15 @@ Value getwork(const Array& params, bool fHelp)
         // Byte reverse
         for (int i = 0; i < 128/4; i++)
             ((unsigned int*)pdata)[i] = ByteReverse(((unsigned int*)pdata)[i]);
+
+        //if ( miningmode != SHA256_MINING_MODE ) {
+        //    CBigNum htarg = CBigNum().SetCompact(pdata->nBits);
+        //    if ( miningmode == SCRYPT_MINING_MODE )
+	//        htarg >>= 8;
+        //    else if ( miningmode == X11_MINING_MODE )
+	//        htarg >>= 7;
+        //    pdata->nBits = htarg.GetCompact();
+        //}
 
         // Get saved block
         if (!mapNewBlock.count(pdata->hashMerkleRoot))
@@ -456,10 +538,10 @@ Value getblocktemplate(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Dogecoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Cccccoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Dogecoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cccccoin is downloading blocks...");
 
     // Update block
     static unsigned int nTransactionsUpdatedLast;
@@ -534,7 +616,18 @@ Value getblocktemplate(const Array& params, bool fHelp)
     Object aux;
     aux.push_back(Pair("flags", HexStr(COINBASE_FLAGS.begin(), COINBASE_FLAGS.end())));
 
-    uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
+    // Adjust nBits based on PoW in use
+    int miningmode = GetArg("-miningmode", 0);
+    unsigned int orig_nBits = pblock->nBits;
+    CBigNum htarg = CBigNum().SetCompact(pblock->nBits);
+    if ( miningmode != SHA256_MINING_MODE ) {
+	if ( miningmode == SCRYPT_MINING_MODE )
+	    htarg <<= 8;
+	else if ( miningmode == X11_MINING_MODE )
+	    htarg <<= 7;
+	pblock->nBits = htarg.GetCompact();
+    }
+    uint256 hashTarget = htarg.getuint256();
 
     static Array aMutable;
     if (aMutable.empty())
@@ -560,6 +653,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
     result.push_back(Pair("bits", HexBits(pblock->nBits)));
     result.push_back(Pair("height", (int64_t)(pindexPrev->nHeight+1)));
 
+    pblock->nBits = orig_nBits;
+
     return result;
 }
 
@@ -580,6 +675,16 @@ Value submitblock(const Array& params, bool fHelp)
     }
     catch (std::exception &e) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
+    }
+
+    int miningmode = GetArg("-miningmode", 0);
+    if ( miningmode != SHA256_MINING_MODE ) {
+        CBigNum htarg = CBigNum().SetCompact(pblock.nBits);
+        if ( miningmode == SCRYPT_MINING_MODE )
+	    htarg >>= 8;
+        else if ( miningmode == X11_MINING_MODE )
+	    htarg >>= 7;
+        pblock.nBits = htarg.GetCompact();
     }
 
     CValidationState state;

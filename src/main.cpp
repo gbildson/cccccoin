@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Copyright (c) 2011-2014 Litecoin Developers
-// Copyright (c) 2013-2014 Dogecoin Developers
+// Copyright (c) 2013-2014 Cccccoin Developers
 // Contributions by /u/lleti, rog1121, and DigiByte (DigiShield Developers).
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -36,8 +36,9 @@ CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
 map<uint256, CBlockIndex*> mapBlockIndex;
-uint256 hashGenesisBlock("0x1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691");
-static CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // Dogecoin: starting difficulty is 1 / 2^12
+//uint256 hashGenesisBlock("0x1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691");
+uint256 hashGenesisBlock("0x0000052d564c1229e90d2f9f3a3e262d768318a648c1c9ea28724c7d6c03a46c");
+static CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // Cccccoin: starting difficulty is 1 / 2^12
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 uint256 nBestChainWork = 0;
@@ -52,6 +53,7 @@ bool fReindex = false;
 bool fBenchmark = false;
 bool fTxIndex = false;
 unsigned int nCoinCacheSize = 5000;
+int64 nChainStartTime = 1389306217; // Line: 2815
 
 /** Fees smaller than this (in satoshi) are considered zero fee (for transaction creation) */
 int64 CTransaction::nMinTxFee = 100000000;
@@ -69,7 +71,7 @@ map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
 
-const string strMessageMagic = "Dogecoin Signed Message:\n";
+const string strMessageMagic = "Cccccoin Signed Message:\n";
 
 double dHashesPerSec = 0.0;
 int64 nHPSTimerStart = 0;
@@ -360,7 +362,7 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
 
 bool CTxOut::IsDust() const
 {
-    // Dogecoin: IsDust() detection disabled, allows any valid dust to be relayed.
+    // Cccccoin: IsDust() detection disabled, allows any valid dust to be relayed.
     // The fees imposed on each dust txo is considered sufficient spam deterrant. 
     return false;
 }
@@ -632,7 +634,7 @@ int64 CTransaction::GetMinFee(unsigned int nBlockSize, bool fAllowFree,
 #endif
     }
 
-    // Dogecoin
+    // Cccccoin
     // To limit dust spam, add nBaseFee for each output less than DUST_SOFT_LIMIT
     BOOST_FOREACH(const CTxOut& txout, vout)
         if (txout.nValue < DUST_SOFT_LIMIT)
@@ -1091,6 +1093,38 @@ uint256 static GetOrphanRoot(const CBlockHeader* pblock)
     return pblock->GetHash();
 }
 
+// yacoin: increasing Nfactor gradually
+const unsigned char minNfactor = 10;
+const unsigned char maxNfactor = 30;
+
+unsigned char GetNfactor(int64 nTimestamp) {
+    int l = 0;
+
+    if (nTimestamp <= nChainStartTime)
+        return minNfactor;
+
+    int64 s = nTimestamp - nChainStartTime;
+    while ((s >> 1) > 3) {
+      l += 1;
+      s >>= 1;
+    }
+
+    s &= 3;
+
+    int n = (l * 158 + s * 28 - 2670) / 100;
+
+    if (n < 0) n = 0;
+
+    if (n > 255)
+        printf( "GetNfactor(%lld) - something wrong(n == %d)\n", nTimestamp, n );
+
+    unsigned char N = (unsigned char) n;
+    //printf("GetNfactor: %d -> %d %d : %d / %d\n", nTimestamp - nChainStartTime, l, s, n, min(max(N, minNfactor), maxNfactor));
+
+    return min(max(N, minNfactor), maxNfactor);
+}
+
+
 int static generateMTRandom(unsigned int s, int range)
 {
     boost::mt19937 gen(s);
@@ -1104,25 +1138,26 @@ int64 static GetBlockValue(int nHeight, int64 nFees, uint256 prevHash)
 {
     int64 nSubsidy = 500000 * COIN;
 
-    std::string cseed_str = prevHash.ToString().substr(7,7);
-    const char* cseed = cseed_str.c_str();
-    long seed = hex2long(cseed);
-    int rand = generateMTRandom(seed, 999999);
-    int rand1 = 0;
+    //std::string cseed_str = prevHash.ToString().substr(7,7);
+    //const char* cseed = cseed_str.c_str();
+    //long seed = hex2long(cseed);
+    //int rand = generateMTRandom(seed, 999999);
+    //int rand1 = 0;
 
-    if(nHeight < 100000)
-    {
-        nSubsidy = (1 + rand) * COIN;
-    }
-    else if(nHeight < 145000)
-    {
-        cseed_str = prevHash.ToString().substr(7,7);
-        cseed = cseed_str.c_str();
-        seed = hex2long(cseed);
-        rand1 = generateMTRandom(seed, 499999);
-        nSubsidy = (1 + rand1) * COIN;
-    }
-    else if(nHeight < 600000)
+    //if(nHeight < 100000)
+    //{
+        //nSubsidy = (1 + rand) * COIN;
+    //}
+    //else if(nHeight < 145000)
+    //{
+        //cseed_str = prevHash.ToString().substr(7,7);
+        //cseed = cseed_str.c_str();
+        //seed = hex2long(cseed);
+        //rand1 = generateMTRandom(seed, 499999);
+        //nSubsidy = (1 + rand1) * COIN;
+    //}
+    //else 
+    if(nHeight < 600000)
     {
         nSubsidy >>= (nHeight / 100000);
     }
@@ -1135,8 +1170,8 @@ int64 static GetBlockValue(int nHeight, int64 nFees, uint256 prevHash)
 }
 
 static const int64 nTargetTimespan = 4 * 60 * 60; // old retarget (4hrs)
-static const int64 nTargetTimespanNEW = 60 ; // DogeCoin: every 1 minute
-static const int64 nTargetSpacing = 60; // DogeCoin: 1 minutes
+static const int64 nTargetTimespanNEW = 60 ; // CcccCoin: every 1 minute
+static const int64 nTargetSpacing = 60; // CcccCoin: 1 minutes
 static const int64 nInterval = nTargetTimespan / nTargetSpacing;
 
 //
@@ -1216,7 +1251,7 @@ unsigned int static GetNextWorkRequired(const CBlockIndex* pindexLast, const CBl
         return pindexLast->nBits;
     }
 
-    // Dogecoin: This fixes an issue where a 51% attack can change difficulty at will.
+    // Cccccoin: This fixes an issue where a 51% attack can change difficulty at will.
     // Go back the full period unless it's the first retarget after genesis. Code courtesy of Art Forz
     int blockstogoback = retargetInterval-1;
     if ((pindexLast->nHeight+1) != retargetInterval)
@@ -1287,12 +1322,20 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
     bnTarget.SetCompact(nBits);
 
     // Check range
-    if (bnTarget <= 0 || bnTarget > bnProofOfWorkLimit)
+    if (bnTarget <= 0 || bnTarget > bnProofOfWorkLimit) {
+        fprintf(stderr, "CheckProofOfWork() : nBits below minimum work");
         return error("CheckProofOfWork() : nBits below minimum work");
+    }
 
     // Check proof of work matches claimed amount
-    if (hash > bnTarget.getuint256())
+    if (hash > bnTarget.getuint256()) {
+        fprintf(stderr,"%s\n", hash.ToString().c_str());
+        fprintf(stderr, "targ: %d\n",nBits);
+        uint256 hashTarget = CBigNum().SetCompact(nBits).getuint256();
+        fprintf(stderr,"ht: %s\n", hashTarget.ToString().c_str());
+        fprintf(stderr, "CheckProofOfWork() : hash doesn't match nBits");
         return error("CheckProofOfWork() : hash doesn't match nBits");
+    }
 
     return true;
 }
@@ -1815,8 +1858,17 @@ bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsVi
         prevHash = pindex->pprev->GetBlockHash();
     }
 
-    if (vtx[0].GetValueOut() > GetBlockValue(pindex->nHeight, nFees, prevHash))
+    int64 bval = GetBlockValue(pindex->nHeight, nFees, prevHash);
+    int64 devval = bval * 5 / 1000;
+    if (devval < 1)
+        devval = 1;
+    bval = bval - devval;
+    if (vtx[0].GetValueOut() > bval)
         return state.DoS(100, error("ConnectBlock() : coinbase pays too much (actual=%"PRI64d" vs limit=%"PRI64d")", vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, nFees, prevHash)));
+
+    if (vtx[0].vout[1].nValue != devval)
+        return state.DoS(100, error("ConnectBlock() : coinbase pays devs too little (actual=%"PRI64d" vs expected=%"PRI64d")", vtx[0].vout[1].nValue, devval));
+    // Insert check of dev pub key here #TODO11
 
     if (!control.Wait())
         return state.DoS(100, false);
@@ -2341,7 +2393,7 @@ bool CBlock::AcceptBlock(CValidationState &state, CDiskBlockPos *dbp)
 
 bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck)
 {
-    // Dogecoin: temporarily disable v2 block lockin until we are ready for v2 transition
+    // Cccccoin: temporarily disable v2 block lockin until we are ready for v2 transition
     return false;
     unsigned int nFound = 0;
     for (unsigned int i = 0; i < nToCheck && nFound < nRequired && pstart != NULL; i++)
@@ -2826,7 +2878,8 @@ bool LoadBlockIndex()
         pchMessageStart[1] = 0xc1;
         pchMessageStart[2] = 0xb7;
         pchMessageStart[3] = 0xdc;
-        hashGenesisBlock = uint256("0xbb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e");
+        //hashGenesisBlock = uint256("0xbb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e");
+        hashGenesisBlock = uint256("00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8");
     }
 
     //
@@ -2859,7 +2912,7 @@ bool InitBlockIndex() {
         //  vMerkleTree: 5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69 
 
         // Genesis block
-        const char* pszTimestamp = "Nintondo";
+        const char* pszTimestamp = "Weidmann: ECB Shouldn't React to Daily Forex Moves";
         CTransaction txNew;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
@@ -2871,22 +2924,87 @@ bool InitBlockIndex() {
         block.hashPrevBlock = 0;
         block.hashMerkleRoot = block.BuildMerkleTree();
         block.nVersion = 1;
-        block.nTime    = 1386325540;
+        block.nTime    = 1394906039;
         block.nBits    = 0x1e0ffff0;
-        block.nNonce   = 99943;
+        //block.nNonce   = 99943;
+        block.nNonce   = 0x0002f431;
 
         if (fTestNet)
         {
-            block.nTime    = 1391503289;
-            block.nNonce   = 997879;
+            block.nTime    = 1394906039;
+            block.nNonce   = 0x000f39f7;
+            block.nNonce   = 2563385;
         }
+
+
+//hash:00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8
+//genesis:bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e
+//merk:c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362
+//00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8
+//bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e
+//c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362
+//nonce 00271D39
+//pow1: 00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8
+//pow2: 0afecae6f5b349ff7f7687035fb271055c104b9f054a2644009cbb1cb35f001e
+//pow4: 05e54b4d6243b19ca63707aa81092efbfc48bf421abc24eb4e6c44e7c5d16f70
+//CBlock(hash=00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8, input=0100000000000000000000000000000000000000000000000000000000000000000000006253094d8282afbf9620ad2c51ac084a4cc0e2d0a19baaf03a580dc1e0afb7c9b7932453f0ff0f1e391d2700, PoW=00000d43cbce1e689cc6dd394dce9e5ccbec03d325a212e6160601c24cca79f8, ver=1, hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000, hashMerkleRoot=c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362, nTime=1394906039, nBits=1e0ffff0, nNonce=2563385, vtx=1)
+    //vMerkleTree: c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362
+//hash:0000052d564c1229e90d2f9f3a3e262d768318a648c1c9ea28724c7d6c03a46c
+//genesis:1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691
+//merk:c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362
+//0000052d564c1229e90d2f9f3a3e262d768318a648c1c9ea28724c7d6c03a46c
+//1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691
+//c9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362
+//nonce 0002F431
+
+
+
+        // If genesis block hash does not match, then generate new genesis hash.
+        if (block.GetHash() != hashGenesisBlock)
+        {
+            std::cerr<<"Searching for genesis block...\n";
+            // This will figure out a valid hash and Nonce if you're
+            // creating a different genesis block:
+            uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
+            uint256 thash;
+
+            while(true)
+            {
+                //unsigned long int scrypt_scratpad_size_current_block = ((1 << (GetNfactor(block.nTime) + 1)) * 128 ) + 63;
+                //char scratchpad[scrypt_scratpad_size_current_block];
+                ////static char scratchpad[SCRYPT_SCRATCHPAD_SIZE];
+                ////scrypt_N_1_1_256_sp(BEGIN(block.nVersion), BEGIN(thash), scratchpad);
+                //scrypt_N_1_1_256_sp_generic(BEGIN(block.nVersion), BEGIN(thash), scratchpad, GetNfactor(block.nTime));
+                ////thash = scrypt_blockhash(BEGIN(block.nVersion));
+                thash = block.GetHash();
+                if (thash <= hashTarget) {
+                    fprintf(stderr, "final nonce %08X: hash = %s (target = %s)\n", block.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
+                    break;
+                }
+                if ((block.nNonce & 0xFFF) == 0)
+                {
+                    fprintf(stderr, "nonce %08X: hash = %s (target = %s)\n", block.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
+                }
+                ++block.nNonce;
+                if (block.nNonce == 0)
+                {
+                    fprintf(stderr, "NONCE WRAPPED, incrementing time\n");
+                    ++block.nTime;
+                }
+            }
+        }
+
 
         //// debug print
         uint256 hash = block.GetHash();
-        printf("%s\n", hash.ToString().c_str());
-        printf("%s\n", hashGenesisBlock.ToString().c_str());
-        printf("%s\n", block.hashMerkleRoot.ToString().c_str());
-        assert(block.hashMerkleRoot == uint256("0x5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69"));
+        std::cerr<<"hash:"<<hash.ToString().c_str()<<'\n';
+        std::cerr<<"genesis:"<<hashGenesisBlock.ToString().c_str()<<'\n';
+        std::cerr<<"merk:"<<block.hashMerkleRoot.ToString().c_str()<<'\n';
+        fprintf(stderr,"%s\n", hash.ToString().c_str());
+        fprintf(stderr,"%s\n", hashGenesisBlock.ToString().c_str());
+        fprintf(stderr,"%s\n", block.hashMerkleRoot.ToString().c_str());
+        fprintf(stderr, "nonce %08X\n", block.nNonce);
+        assert(block.hashMerkleRoot == uint256("0xc9b7afe0c10d583af0aa9ba1d0e2c04c4a08ac512cad2096bfaf82824d095362"));
         block.print();
         assert(hash == hashGenesisBlock);
 
@@ -4201,7 +4319,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// DogecoinMiner
+// CccccoinMiner
 //
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)
@@ -4304,8 +4422,16 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
     CTransaction txNew;
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
-    txNew.vout.resize(1);
+    //txNew.vout.resize(1);
+    txNew.vout.resize(2);
     txNew.vout[0].scriptPubKey = scriptPubKeyIn;
+    //txNew.vout[1].scriptPubKey = scriptPubKeyIn;
+    txNew.vout[1].scriptPubKey = CScript() << ParseHex("020ffe7fff22a57ec15683f63dd3c9f2ed0376ccd8f4af8f2d09a51439edb3088e") << OP_CHECKSIG;
+    //DDFsxnZkiTa3WaPimPPhzW1KrwbS7rzZ2i
+//020ffe7fff22a57ec15683f63dd3c9f2ed0376ccd8f4af8f2d09a51439edb3088e
+//017ffe7fff22a57ec15683f63dd3c9f2ed0376ccd8f4af8f2d09a51439edb3088e
+        //txNew.vout[0].scriptPubKey = CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
+
 
     // Add our coinbase tx as first transaction
     pblock->vtx.push_back(txNew);
@@ -4508,7 +4634,12 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         nLastBlockSize = nBlockSize;
         printf("CreateNewBlock(): total size %"PRI64u"\n", nBlockSize);
 
-        pblock->vtx[0].vout[0].nValue = GetBlockValue(pindexPrev->nHeight+1, nFees, pindexPrev->GetBlockHash());
+        int64 bval = GetBlockValue(pindexPrev->nHeight+1, nFees, pindexPrev->GetBlockHash());
+        int64 devval = bval * 5 / 1000;
+        if (devval < 1)
+            devval = 1;
+        pblock->vtx[0].vout[0].nValue = bval - devval;
+        pblock->vtx[0].vout[1].nValue = devval;
         pblocktemplate->vTxFees[0] = -nFees;
 
         // Fill in header
@@ -4614,7 +4745,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         return false;
 
     //// debug print
-    printf("DogecoinMiner:\n");
+    printf("CccccoinMiner:\n");
     printf("proof-of-work found  \n  hash: %s  \ntarget: %s\n", hash.GetHex().c_str(), hashTarget.GetHex().c_str());
     pblock->print();
     printf("generated %s\n", FormatMoney(pblock->vtx[0].vout[0].nValue).c_str());
@@ -4623,7 +4754,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
-            return error("DogecoinMiner : generated block is stale");
+            return error("CccccoinMiner : generated block is stale");
 
         // Remove key from key pool
         reservekey.KeepKey();
@@ -4637,17 +4768,17 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         // Process this block the same as if we had received it from another node
         CValidationState state;
         if (!ProcessBlock(state, NULL, pblock))
-            return error("DogecoinMiner : ProcessBlock, block not accepted");
+            return error("CccccoinMiner : ProcessBlock, block not accepted");
     }
 
     return true;
 }
 
-void static DogecoinMiner(CWallet *pwallet)
+void static CccccoinMiner(CWallet *pwallet)
 {
-    printf("DogecoinMiner started\n");
+    printf("CccccoinMiner started\n");
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
-    RenameThread("dogecoin-miner");
+    RenameThread("cccccoin-miner");
 
     // Each thread has its own key and counter
     CReserveKey reservekey(pwallet);
@@ -4669,7 +4800,7 @@ void static DogecoinMiner(CWallet *pwallet)
         CBlock *pblock = &pblocktemplate->block;
         IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
 
-        printf("Running DogecoinMiner with %"PRIszu" transactions in block (%u bytes)\n", pblock->vtx.size(),
+        printf("Running CccccoinMiner with %"PRIszu" transactions in block (%u bytes)\n", pblock->vtx.size(),
                ::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
 
         //
@@ -4689,23 +4820,48 @@ void static DogecoinMiner(CWallet *pwallet)
         //
         // Search
         //
+        int miningmode = GetArg("-miningmode", 0);
         int64 nStart = GetTime();
-        uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
+        CBigNum htarg = CBigNum().SetCompact(pblock->nBits);
+        if ( miningmode == SCRYPT_MINING_MODE )
+            htarg <<= 8;
+        else if ( miningmode == X11_MINING_MODE )
+            htarg <<= 7;
+        //uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
+        uint256 hashTarget = htarg.getuint256();
+        unsigned int nBits_orig = pblock->nBits;
+        pblock->nBits = htarg.GetCompact();
         loop
         {
             unsigned int nHashesDone = 0;
 
             uint256 thash;
-            char scratchpad[SCRYPT_SCRATCHPAD_SIZE];
+
+            unsigned long int scrypt_scratpad_size_current_block = ((1 << (GetNfactor(pblock->nTime) +0+ 1)) * 128 ) + 63;
+
+            char scratchpad[scrypt_scratpad_size_current_block];
+
+            /*printf("nTime -> %d", pblock->nTime);
+            printf("scrypt_scratpad_size_current_block -> %ld", sizeof(scrypt_scratpad_size_current_block));
+            printf("scratchpad -> %d", sizeof(scratchpad));*/
+
             loop
             {
 
-                scrypt_1024_1_1_256_sp(BEGIN(pblock->nVersion), BEGIN(thash), scratchpad);
+                //scrypt_N_1_1_256_sp_generic(BEGIN(pblock->nVersion), BEGIN(thash), scratchpad, GetNfactor(pblock->nTime)+0);
+                if ( miningmode == SCRYPT_MINING_MODE ) {
+                    scrypt_N_1_1_256_sp_generic(BEGIN(pblock->nVersion), BEGIN(thash), scratchpad, 10);
+                } else if ( miningmode == X11_MINING_MODE ) {
+                    thash = Hash9(BEGIN(pblock->nVersion), END(pblock->nNonce));
+                } else {
+                    thash = pblock->GetHash();
+                }
 
                 if (thash <= hashTarget)
                 {
                     // Found a solution
                     SetThreadPriority(THREAD_PRIORITY_NORMAL);
+                    pblock->nBits = nBits_orig;
                     CheckWork(pblock, *pwallet, reservekey);
                     SetThreadPriority(THREAD_PRIORITY_LOWEST);
                     break;
@@ -4715,6 +4871,7 @@ void static DogecoinMiner(CWallet *pwallet)
                 if ((pblock->nNonce & 0xFF) == 0)
                     break;
             }
+
 
             // Meter hashes/sec
             static int64 nHashCounter;
@@ -4769,7 +4926,7 @@ void static DogecoinMiner(CWallet *pwallet)
     } }
     catch (boost::thread_interrupted)
     {
-        printf("DogecoinMiner terminated\n");
+        printf("CccccoinMiner terminated\n");
         throw;
     }
 }
@@ -4794,7 +4951,7 @@ void GenerateBitcoins(bool fGenerate, CWallet* pwallet)
 
     minerThreads = new boost::thread_group();
     for (int i = 0; i < nThreads; i++)
-        minerThreads->create_thread(boost::bind(&DogecoinMiner, pwallet));
+        minerThreads->create_thread(boost::bind(&CccccoinMiner, pwallet));
 }
 
 // Amount compression:
